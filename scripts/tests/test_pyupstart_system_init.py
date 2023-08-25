@@ -52,86 +52,86 @@ class TestSystemUpstart(unittest.TestCase):
 
     def tearDown(self):
         # Ensure no state file exists
-        state_file = '{}{}{}'.format(SYSTEM_LOG_DIR, os.sep, UPSTART_STATE_FILE)
+        state_file = f'{SYSTEM_LOG_DIR}{os.sep}{UPSTART_STATE_FILE}'
         self.assertFalse(os.path.exists(state_file))
 
 class TestSystemInitReExec(TestSystemUpstart):
 
     def test_pid1_reexec(self):
-      version = self.upstart.version()
-      self.assertTrue(version)
+        version = self.upstart.version()
+        self.assertTrue(version)
 
-      # Create an invalid job to ensure this causes no problems for
-      # the re-exec. Note that we cannot use job_create() since
-      # that validates the syntax of the .conf file).
-      #
-      # We create this file before any other to allow time for Upstart
-      # to _attempt to parse it_ by the time the re-exec is initiated.
-      invalid_conf = "{}/invalid.conf".format(self.upstart.test_dir)
-      with open(invalid_conf, 'w', encoding='utf-8') as fh:
-          print("invalid", file=fh)
+          # Create an invalid job to ensure this causes no problems for
+          # the re-exec. Note that we cannot use job_create() since
+          # that validates the syntax of the .conf file).
+          #
+          # We create this file before any other to allow time for Upstart
+          # to _attempt to parse it_ by the time the re-exec is initiated.
+        invalid_conf = f"{self.upstart.test_dir}/invalid.conf"
+        with open(invalid_conf, 'w', encoding='utf-8') as fh:
+            print("invalid", file=fh)
 
-      # create a job and start it, marking it such that the .conf file
-      # will be retained when object becomes unusable (after re-exec).
-      job = self.upstart.job_create('connected-job', ['exec upstart-udev-bridge', 'respawn'], retain=True)
-      self.assertTrue(job)
+        # create a job and start it, marking it such that the .conf file
+        # will be retained when object becomes unusable (after re-exec).
+        job = self.upstart.job_create('connected-job', ['exec upstart-udev-bridge', 'respawn'], retain=True)
+        self.assertTrue(job)
 
-      # Used when recreating the job
-      conf_path = job.conffile
+        # Used when recreating the job
+        conf_path = job.conffile
 
-      inst = job.start()
-      self.assertTrue(inst)
-      pids = job.pids()
-      self.assertEqual(len(pids), 1)
-      pid = pids['main']
+        inst = job.start()
+        self.assertTrue(inst)
+        pids = job.pids()
+        self.assertEqual(len(pids), 1)
+        pid = pids['main']
 
-      self.upstart.reexec()
+        self.upstart.reexec()
 
-      # PID 1 Upstart is now in the process of starting, but we need to
-      # reconnect to it via D-Bus since it cannot yet retain client
-      # connections. However, since the re-exec won't be instantaneous,
-      # try a few times.
-      self.upstart.polling_connect(force=True)
+        # PID 1 Upstart is now in the process of starting, but we need to
+        # reconnect to it via D-Bus since it cannot yet retain client
+        # connections. However, since the re-exec won't be instantaneous,
+        # try a few times.
+        self.upstart.polling_connect(force=True)
 
-      # Since the parent job was created with 'retain', this is actually
-      # a NOP but is added to denote that the old instance is dead.
-      inst.destroy()
+        # Since the parent job was created with 'retain', this is actually
+        # a NOP but is added to denote that the old instance is dead.
+        inst.destroy()
 
-      # check that we can still operate on the re-exec'd Upstart
-      version_postexec = self.upstart.version()
-      self.assertTrue(version_postexec)
-      self.assertEqual(version, version_postexec)
+        # check that we can still operate on the re-exec'd Upstart
+        version_postexec = self.upstart.version()
+        self.assertTrue(version_postexec)
+        self.assertEqual(version, version_postexec)
 
-      # Ensure the job is still running with the same PID
-      self.assertRaises(ProcessLookupError, os.kill, pid, 0)
+        # Ensure the job is still running with the same PID
+        self.assertRaises(ProcessLookupError, os.kill, pid, 0)
 
-      # XXX: The re-exec will have severed the D-Bus connection to
-      # Upstart. Hence, revivify the job with some magic.
-      job = self.upstart.job_recreate('connected-job', conf_path)
-      self.assertTrue(job)
+        # XXX: The re-exec will have severed the D-Bus connection to
+        # Upstart. Hence, revivify the job with some magic.
+        job = self.upstart.job_recreate('connected-job', conf_path)
+        self.assertTrue(job)
 
-      # Recreate the instance
-      inst = job.get_instance()
-      self.assertTrue(inst)
+        # Recreate the instance
+        inst = job.get_instance()
+        self.assertTrue(inst)
 
-      self.assertTrue(job.running('_'))
-      pids = job.pids()
-      self.assertEqual(len(pids), 1)
-      self.assertTrue(pids['main'])
+        self.assertTrue(job.running('_'))
+        pids = job.pids()
+        self.assertEqual(len(pids), 1)
+        self.assertTrue(pids['main'])
 
-      # The pid _must_ have changed after a restart
-      self.assertNotEqual(pid, pids['main'])
+        # The pid _must_ have changed after a restart
+        self.assertNotEqual(pid, pids['main'])
 
-      job.stop()
+        job.stop()
 
-      # Ensure the pid has gone
-      with self.assertRaises(ProcessLookupError):
-          os.kill(pid, 0)
+        # Ensure the pid has gone
+        with self.assertRaises(ProcessLookupError):
+            os.kill(pid, 0)
 
-      os.remove(invalid_conf)
+        os.remove(invalid_conf)
 
-      # Clean up
-      self.upstart.destroy()
+        # Clean up
+        self.upstart.destroy()
 
 class TestSystemInitChrootSession(TestSystemUpstart):
     CHROOT_ENVVAR = 'UPSTART_TEST_CHROOT_PATH'
@@ -140,13 +140,13 @@ class TestSystemInitChrootSession(TestSystemUpstart):
         chroot_path = os.environ.get(self.CHROOT_ENVVAR, None)
 
         if not chroot_path:
-            raise unittest.SkipTest('{} variable not set'.format(self.CHROOT_ENVVAR))
+            raise unittest.SkipTest(f'{self.CHROOT_ENVVAR} variable not set')
 
         # Ensure the chroot exists
         self.assertTrue(os.path.exists(chroot_path))
 
         # Ensure Upstart is installed in the chroot
-        chroot_initctl = '{}{}{}'.format(chroot_path, os.sep, get_initctl())
+        chroot_initctl = f'{chroot_path}{os.sep}{get_initctl()}'
         self.assertTrue(os.path.exists(chroot_initctl))
 
         # No sessions should exist before the test starts
@@ -168,7 +168,6 @@ class TestSystemInitChrootSession(TestSystemUpstart):
         self.assertTrue(self.upstart.version())
 
 def main():
-    kwargs = {}
     format =             \
         '%(asctime)s:'   \
         '%(filename)s:'  \
@@ -177,11 +176,7 @@ def main():
         '%(levelname)s:' \
         '%(message)s'
 
-    kwargs['format'] = format
-
-    # We want to see what's happening
-    kwargs['level'] = logging.DEBUG
-
+    kwargs = {'format': format, 'level': logging.DEBUG}
     logging.basicConfig(**kwargs)
 
     unittest.main(

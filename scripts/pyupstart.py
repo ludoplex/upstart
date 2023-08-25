@@ -264,7 +264,7 @@ class Upstart:
         @timeout: seconds to wait for successful connection.
         @force: if True, force a reconnection.
         """
-        for i in range(timeout):
+        for _ in range(timeout):
             try:
                 self.connect(force=force)
                 self.version()
@@ -319,8 +319,8 @@ class Upstart:
         Create a directory to hold the test jobs beneath the job
         configuration directory.
         """
-        self.test_dir = tempfile.mkdtemp(prefix=NAME + '-', dir=self.conf_dir)
-        self.test_dir_name = self.test_dir.replace("%s/" % self.conf_dir, '')
+        self.test_dir = tempfile.mkdtemp(prefix=f'{NAME}-', dir=self.conf_dir)
+        self.test_dir_name = self.test_dir.replace(f"{self.conf_dir}/", '')
 
     def create_dirs(self):
         """
@@ -374,10 +374,7 @@ class Upstart:
         """
         properties = dbus.Interface(self.remote_object, FREEDESKTOP_PROPERTIES)
         version_string = properties.Get(INTERFACE_NAME, 'version')
-        if raw:
-            return version_string
-
-        return version_string.split()[2].strip(')')
+        return version_string if raw else version_string.split()[2].strip(')')
 
     def get_state_json(self):
         """
@@ -397,8 +394,7 @@ class Upstart:
         Returns dictionary of session details.
         """
         state = self.get_state()
-        sessions = state['sessions']
-        return sessions
+        return state['sessions']
 
     def session_count(self):
         """
@@ -470,11 +466,9 @@ class Upstart:
         self.retain = retain
 
         # construct the D-Bus path for the new job
-        job_path = '{}/{}'.format(self.test_dir_name, name)
+        job_path = f'{self.test_dir_name}/{name}'
 
-        self.job_object_path = '{}/{}/{}'.format(
-            OBJECT_PATH, 'jobs', dbus_encode(job_path)
-        )
+        self.job_object_path = f'{OBJECT_PATH}/jobs/{dbus_encode(job_path)}'
 
         self.connection.add_signal_receiver(
             self._job_added_cb,
@@ -511,10 +505,8 @@ class Upstart:
         assert (name)
         assert (conf_path)
 
-        job_path = '{}/{}'.format(self.test_dir_name, name)
-        self.job_object_path = '{}/{}/{}'.format(
-            OBJECT_PATH, 'jobs', dbus_encode(job_path)
-        )
+        job_path = f'{self.test_dir_name}/{name}'
+        self.job_object_path = f'{OBJECT_PATH}/jobs/{dbus_encode(job_path)}'
 
         self.new_job = Job(self, self.test_dir, self.test_dir_name,
                 name, body=None, reuse_path=conf_path)
@@ -582,7 +574,7 @@ class Job:
         if self.reuse_path:
             self.conffile = self.reuse_path
         else:
-            self.conffile = os.path.join(self.job_dir, self.name + '.conf')
+            self.conffile = os.path.join(self.job_dir, f'{self.name}.conf')
 
         if self.body and isinstance(self.body, str):
             # Assume body cannot be a bytes object.
@@ -591,8 +583,7 @@ class Job:
         if not self.body and self.reuse_path:
             # Just check conf file exists
             if not os.path.exists(self.conffile):
-                raise UpstartException(
-                        'File {} does not exist for reuse'.format(self.conffile))
+                raise UpstartException(f'File {self.conffile} does not exist for reuse')
         else:
             # Create conf file
             with open(self.conffile, 'w', encoding='utf-8') as fh:
@@ -602,14 +593,11 @@ class Job:
 
         self.valid = True
 
-        subdir_object_path = dbus_encode(
-            "%s/%s" % (self.subdir_name, self.name)
-        )
-        self.object_path = "%s/%s/%s" % \
-            (OBJECT_PATH, 'jobs', subdir_object_path)
+        subdir_object_path = dbus_encode(f"{self.subdir_name}/{self.name}")
+        self.object_path = f"{OBJECT_PATH}/jobs/{subdir_object_path}"
 
         self.remote_object = \
-            self.upstart.connection.get_object(BUS_NAME, self.object_path)
+                self.upstart.connection.get_object(BUS_NAME, self.object_path)
         self.interface = dbus.Interface(self.remote_object, JOB_INTERFACE_NAME)
 
     def destroy(self):
@@ -640,7 +628,7 @@ class Job:
             env = []
         instance_path = self.interface.Start(dbus.Array(env, 's'), wait)
 
-        instance_name = instance_path.replace("%s/" % self.object_path, '')
+        instance_name = instance_path.replace(f"{self.object_path}/", '')
 
         # store the D-Bus encoded instance name ('_' for single-instance jobs)
         if instance_name not in self.instance_names:
@@ -656,15 +644,10 @@ class Job:
         """
 
         # construct the D-Bus path for the new job
-        job_path = '{}/{}'.format(self.upstart.test_dir_name, self.name)
+        job_path = f'{self.upstart.test_dir_name}/{self.name}'
 
-        instance_path = '{}/{}/{}/{}'.format(
-            OBJECT_PATH, 'jobs', dbus_encode(job_path),
-
-            # XXX: LIMITATION - only support default instance.
-            '_'
-        )
-        instance_name = instance_path.replace("%s/" % self.object_path, '')
+        instance_path = f'{OBJECT_PATH}/jobs/{dbus_encode(job_path)}/_'
+        instance_name = instance_path.replace(f"{self.object_path}/", '')
 
         # store the D-Bus encoded instance name ('_' for single-instance jobs)
         if instance_name not in self.instance_names:
@@ -684,10 +667,10 @@ class Job:
 
         assert name, 'Name must not be None'
 
-        object_path = '{}/{}'.format(self.object_path, name)
+        object_path = f'{self.object_path}/{name}'
 
         remote_object = \
-            self.upstart.connection.get_object(BUS_NAME, object_path)
+                self.upstart.connection.get_object(BUS_NAME, object_path)
 
         return dbus.Interface(remote_object, INSTANCE_INTERFACE_NAME)
 
@@ -720,8 +703,7 @@ class Job:
         """
         Returns a list of instance object paths.
         """
-        return ["%s/%s" % (self.object_path, instance)
-                for instance in self.instance_names]
+        return [f"{self.object_path}/{instance}" for instance in self.instance_names]
 
     def pids(self, name=None):
         """
@@ -751,16 +733,7 @@ class Job:
         # don't assert as there may not be any processes
         procs = properties.Get(INSTANCE_INTERFACE_NAME, 'processes')
 
-        pid_map = {}
-
-        for proc in procs:
-            # convert back to natural types
-            job_proc = str(proc[0])
-            job_pid = int(proc[1])
-
-            pid_map[job_proc] = job_pid
-
-        return pid_map
+        return {str(proc[0]): int(proc[1]) for proc in procs}
 
     def running(self, name):
         """
@@ -773,10 +746,7 @@ class Job:
         if len(self.instance_names) > 1:
             raise UpstartException('Cannot handle multiple instances')
 
-        if name not in self.instance_names:
-            return False
-
-        return len(self.pids(name)) > 0
+        return False if name not in self.instance_names else len(self.pids(name)) > 0
 
     def logfile_name(self, instance_name):
         """
@@ -790,17 +760,13 @@ class Job:
         """
 
         if instance_name != '_':
-            filename = '{}_{}-{}.log'.format(
-                self.subdir_name, self.name, instance_name
-            )
+            filename = f'{self.subdir_name}_{self.name}-{instance_name}.log'
         else:
             # Note the underscore that Upstart auto-maps from the subdirectory
             # slash (see init(5)).
-            filename = '{}_{}.log'.format(self.subdir_name, self.name)
+            filename = f'{self.subdir_name}_{self.name}.log'
 
-        logfile = os.path.join(self.upstart.log_dir, filename)
-
-        return logfile
+        return os.path.join(self.upstart.log_dir, filename)
 
 
 class LogFile:
@@ -948,16 +914,7 @@ class JobInstance:
     def pids(self):
         procs = self.properties.Get(INSTANCE_INTERFACE_NAME, 'processes')
 
-        pid_map = {}
-
-        for proc in procs:
-            # convert back to natural types
-            job_proc = str(proc[0])
-            job_pid = int(proc[1])
-
-            pid_map[job_proc] = job_pid
-
-        return pid_map
+        return {str(proc[0]): int(proc[1]) for proc in procs}
 
     def destroy(self):
         """
@@ -1055,54 +1012,52 @@ class SessionInit(Upstart):
             #
             # Multiple conf file directories are supported, but we'll
             # stick with the default.
-            config_home = os.environ.get('XDG_CONFIG_HOME', "%s/%s"
-                                         % (os.environ.get('HOME'), '.config'))
-            cache_home = os.environ.get('XDG_CACHE_HOME', "%s/%s"
-                                        % (os.environ.get('HOME'), '.cache'))
+            config_home = os.environ.get(
+                'XDG_CONFIG_HOME', f"{os.environ.get('HOME')}/.config"
+            )
+            cache_home = os.environ.get(
+                'XDG_CACHE_HOME', f"{os.environ.get('HOME')}/.cache"
+            )
 
-            self.conf_dir = "%s/%s" % (config_home, 'upstart')
-            self.log_dir = "%s/%s" % (cache_home, 'upstart')
+            self.conf_dir = f"{config_home}/upstart"
+            self.log_dir = f"{cache_home}/upstart"
         else:
-            args = []
-
             pid = os.getpid()
             init_binary = get_init()
 
-            self.logger.debug('Using init binary %s' % init_binary)
+            self.logger.debug(f'Using init binary {init_binary}')
 
             self.conf_dir = \
-                tempfile.mkdtemp(prefix="%s-confdir-%d-" % (NAME, pid))
+                    tempfile.mkdtemp(prefix="%s-confdir-%d-" % (NAME, pid))
 
             self.log_dir = \
-                tempfile.mkdtemp(prefix="%s-logdir-%d-" % (NAME, pid))
+                    tempfile.mkdtemp(prefix="%s-logdir-%d-" % (NAME, pid))
 
-            args.extend([init_binary, '--user',
-                           '--confdir', self.conf_dir,
-                           '--logdir', self.log_dir])
-
+            args = [
+                init_binary,
+                '--user',
+                '--confdir',
+                self.conf_dir,
+                '--logdir',
+                self.log_dir,
+            ]
             if extra:
                 args.extend(extra)
 
-            self.logger.debug(
-                'Starting Session Init with arguments: %s' % " ".join(args)
-            )
+            self.logger.debug(f'Starting Session Init with arguments: {" ".join(args)}')
 
             watch_manager = pyinotify.WatchManager()
             mask = pyinotify.IN_CREATE
             notifier = \
-                pyinotify.Notifier(watch_manager, InotifyHandler())
+                    pyinotify.Notifier(watch_manager, InotifyHandler())
             session = os.path.join(os.environ['XDG_RUNTIME_DIR'], SESSION_DIR_FMT)
             watch_manager.add_watch(session, mask)
 
             notifier.process_events()
 
-            if self.capture:
-                self.out = open(self.capture, 'w')
-            else:
-                self.out = subprocess.DEVNULL
-
+            self.out = open(self.capture, 'w') if self.capture else subprocess.DEVNULL
             self.proc = \
-                subprocess.Popen(args=args, stdout=self.out, stderr=self.out)
+                    subprocess.Popen(args=args, stdout=self.out, stderr=self.out)
 
             self.pid = self.proc.pid
 
@@ -1111,8 +1066,8 @@ class SessionInit(Upstart):
             millisecs_timeout = secs_to_milli(self.timeout)
             if not notifier.check_events(timeout=millisecs_timeout):
                 msg = \
-                    "Timed-out waiting for session file after %d seconds" \
-                    % self.timeout
+                        "Timed-out waiting for session file after %d seconds" \
+                        % self.timeout
                 raise UpstartException(msg)
 
             # consume
@@ -1128,12 +1083,12 @@ class SessionInit(Upstart):
             # started).
             sessions = self._get_sessions()
 
-            if not str(self.pid) in sessions:
+            if str(self.pid) not in sessions:
                 msg = "Session with pid %d not found" % self.pid
                 raise UpstartException(msg)
 
             self.socket = sessions[str(self.pid)]
-            self.logger.debug("Created Upstart Session '%s'" % self.socket)
+            self.logger.debug(f"Created Upstart Session '{self.socket}'")
             os.putenv(UPSTART_SESSION_ENV, self.socket)
 
         self.set_test_dir()

@@ -112,15 +112,11 @@ def footer(ofh):
     else:
         details += "\\nfor session '%s'\\n" % upstart_session
 
-    if options.restrictions:
-        details += "(subset, "
-    else:
-        details += "("
-
+    details += "(subset, " if options.restrictions else "("
     if options.infile:
         details += "from file data)."
     else:
-        details += "from '%s' on host %s)." % (cmd, os.uname()[1])
+        details += f"from '{cmd}' on host {os.uname()[1]})."
 
     ofh.write("  overlap=false;\n"
               "  label=\"Generated on {datenow} by {script_name} {details}\\n"
@@ -147,18 +143,18 @@ def sanitise(s):
 # return it. Used for very rudimentary instance handling.
 def encode_dollar(job, name):
     if name[0] == '$':
-        name = job + ':' + name
+        name = f'{job}:{name}'
     return name
 
 
 # Jobs and events can have identical names, so prefix them to namespace
 # them off.
 def mk_job_node_name(name):
-    return sanitise('job_' + name)
+    return sanitise(f'job_{name}')
 
 
 def mk_event_node_name(name):
-    return sanitise('event_' + name)
+    return sanitise(f'event_{name}')
 
 
 def show_event(ofh, name):
@@ -166,11 +162,7 @@ def show_event(ofh, name):
           "fillcolor=\"%s\"," % (mk_event_node_name(name), name,
                                  options.color_event_text, options.color_event)
 
-    if '*' in name:
-        str += " style=\"dotted\""
-    else:
-        str += " style=\"filled\""
-
+    str += " style=\"dotted\"" if '*' in name else " style=\"filled\""
     str += "];\n"
 
     ofh.write(str)
@@ -217,11 +209,7 @@ def show_job(ofh, name):
 
 
 def show_jobs(ofh):
-    if restrictions_list:
-        jobs_to_show = restrictions_list
-    else:
-        jobs_to_show = jobs
-
+    jobs_to_show = restrictions_list if restrictions_list else jobs
     for j in jobs_to_show:
         show_job(ofh, j)
         # add those jobs which are referenced by existing jobs, but which
@@ -265,41 +253,61 @@ def show_edge(ofh, from_node, to_node, color):
 
 def show_start_on_job_edge(ofh, from_job, to_job, relation):
     if relation == 'starting':
-        show_edge(ofh, "%s:start" % mk_job_node_name(from_job),
-                  "%s:job" % mk_job_node_name(to_job),options.color_start_on)
+        show_edge(
+            ofh,
+            f"{mk_job_node_name(from_job)}:start",
+            f"{mk_job_node_name(to_job)}:job",
+            options.color_start_on,
+        )
     else:
-        show_edge(ofh, "%s:job" % mk_job_node_name(to_job),
-                  "%s:start" % mk_job_node_name(from_job), options.color_start_on)
+        show_edge(
+            ofh,
+            f"{mk_job_node_name(to_job)}:job",
+            f"{mk_job_node_name(from_job)}:start",
+            options.color_start_on,
+        )
 
 
 def show_start_on_event_edge(ofh, from_job, to_event):
-    show_edge(ofh, mk_event_node_name(to_event),
-              "%s:start" % mk_job_node_name(from_job), options.color_start_on)
+    show_edge(
+        ofh,
+        mk_event_node_name(to_event),
+        f"{mk_job_node_name(from_job)}:start",
+        options.color_start_on,
+    )
 
 
 def show_stop_on_job_edge(ofh, from_job, to_job):
-    show_edge(ofh, "%s:job" % mk_job_node_name(to_job),
-              "%s:stop" % mk_job_node_name(from_job), options.color_stop_on)
+    show_edge(
+        ofh,
+        f"{mk_job_node_name(to_job)}:job",
+        f"{mk_job_node_name(from_job)}:stop",
+        options.color_stop_on,
+    )
 
 
 def show_stop_on_event_edge(ofh, from_job, to_event):
-    show_edge(ofh, mk_event_node_name(to_event),
-              "%s:stop" % mk_job_node_name(from_job), options.color_stop_on)
+    show_edge(
+        ofh,
+        mk_event_node_name(to_event),
+        f"{mk_job_node_name(from_job)}:stop",
+        options.color_stop_on,
+    )
 
 
 def show_job_emits_edge(ofh, from_job, to_event):
-    show_edge(ofh, "%s:job" % mk_job_node_name(from_job),
-              mk_event_node_name(to_event), options.color_emits)
+    show_edge(
+        ofh,
+        f"{mk_job_node_name(from_job)}:job",
+        mk_event_node_name(to_event),
+        options.color_emits,
+    )
 
 
 def show_edges(ofh):
     glob_jobs = {}
 
-    if restrictions_list:
-        jobs_list = restrictions_list
-    else:
-        jobs_list = jobs
-
+    jobs_list = restrictions_list if restrictions_list else jobs
     for job in jobs_list:
         for s in jobs[job]['start on']['job']:
             show_start_on_job_edge(ofh, job, s, jobs[job]['start on']['job'][s])
@@ -315,11 +323,7 @@ def show_edges(ofh):
 
         for e in jobs[job]['emits']:
             if '*' in e:
-                # handle glob patterns in 'emits'
-                glob_events = []
-                for _e in events:
-                    if e != _e and fnmatch.fnmatch(_e, e):
-                        glob_events.append(_e)
+                glob_events = [_e for _e in events if e != _e and fnmatch.fnmatch(_e, e)]
                 glob_jobs[job] = glob_events
 
             show_job_emits_edge(ofh, job, e)
@@ -341,8 +345,8 @@ def show_edges(ofh):
 
     # Create links from jobs (which advertise they emits a class of
     # events, via the glob syntax) to all the events they create.
-    for g in glob_jobs:
-        for ge in glob_jobs[g]:
+    for g, value in glob_jobs.items():
+        for ge in value:
             show_job_emits_edge(ofh, g, ge)
 
     if not restrictions_list:
@@ -371,34 +375,34 @@ def read_data():
         try:
             ifh = open(options.infile, 'r')
         except:
-            sys.exit("ERROR: cannot read file '%s'" % options.infile)
+            sys.exit(f"ERROR: cannot read file '{options.infile}'")
     else:
         try:
             ifh = Popen(cmd.split(), stdout=PIPE,
                         universal_newlines=True).stdout
         except:
-            sys.exit("ERROR: cannot run '%s'" % cmd)
+            sys.exit(f"ERROR: cannot run '{cmd}'")
 
     job = None
     for line in ifh:
         line = line.rstrip()
 
-        result = re.match('^\s+start on ([^,]+) \(job:\s*([^,]*), env:', line)
-        if result:
-            _event = encode_dollar(job, result.group(1))
-            _job = result.group(2)
-            if _job:
+        if result := re.match(
+            '^\s+start on ([^,]+) \(job:\s*([^,]*), env:', line
+        ):
+            _event = encode_dollar(job, result[1])
+            if _job := result[2]:
                 jobs[job]['start on']['job'][_job] = _event
             else:
                 jobs[job]['start on']['event'][_event] = 1
                 events[_event] = 1
             continue
 
-        result = re.match('^\s+stop on ([^,]+) \(job:\s*([^,]*), env:', line)
-        if result:
-            _event = encode_dollar(job, result.group(1))
-            _job = result.group(2)
-            if _job:
+        if result := re.match(
+            '^\s+stop on ([^,]+) \(job:\s*([^,]*), env:', line
+        ):
+            _event = encode_dollar(job, result[1])
+            if _job := result[2]:
                 jobs[job]['stop on']['job'][_job] = 1
             else:
                 jobs[job]['stop on']['event'][_event] = 1
@@ -414,30 +418,19 @@ def read_data():
             tokens = line.lstrip().split()
 
             if len(tokens) != 1:
-                sys.exit("ERROR: invalid line: %s" % line.lstrip())
+                sys.exit(f"ERROR: invalid line: {line.lstrip()}")
 
-            job_record = {}
-
-            start_on = {}
             start_on_jobs = {}
             start_on_events = {}
 
-            stop_on = {}
             stop_on_jobs = {}
             stop_on_events = {}
 
             emits = {}
 
-            start_on['job'] = start_on_jobs
-            start_on['event'] = start_on_events
-
-            stop_on['job'] = stop_on_jobs
-            stop_on['event'] = stop_on_events
-
-            job_record['start on'] = start_on
-            job_record['stop on'] = stop_on
-            job_record['emits'] = emits
-
+            start_on = {'job': start_on_jobs, 'event': start_on_events}
+            stop_on = {'job': stop_on_jobs, 'event': stop_on_events}
+            job_record = {'start on': start_on, 'stop on': stop_on, 'emits': emits}
             job = (tokens)[0]
             jobs[job] = job_record
 
@@ -449,10 +442,10 @@ def main():
     global use_system
     global upstart_session
 
-    description = "Convert initctl(8) output to GraphViz dot(1) format."
     epilog = "See http://www.graphviz.org/doc/info/colors.html " \
              "for available colours."
 
+    description = "Convert initctl(8) output to GraphViz dot(1) format."
     parser = ArgumentParser(description=description, epilog=epilog)
 
     parser.add_argument("-r", "--restrict-to-jobs",
@@ -465,55 +458,66 @@ def main():
                         help="File to read output from. If not specified"
                         ", initctl will be run automatically.")
 
-    parser.add_argument("-o", "--outfile",
-                        dest="outfile",
-                        help="File to write output to (default=%s)" %
-                             default_outfile)
+    parser.add_argument(
+        "-o",
+        "--outfile",
+        dest="outfile",
+        help=f"File to write output to (default={default_outfile})",
+    )
 
-    parser.add_argument("--color-emits",
-                        dest="color_emits",
-                        help="Specify color for 'emits' lines (default=%s)." %
-                             default_color_emits)
+    parser.add_argument(
+        "--color-emits",
+        dest="color_emits",
+        help=f"Specify color for 'emits' lines (default={default_color_emits}).",
+    )
 
-    parser.add_argument("--color-start-on",
-                        dest="color_start_on",
-                        help="Specify color for 'start on' lines "
-                             "(default=%s)." % default_color_start_on)
+    parser.add_argument(
+        "--color-start-on",
+        dest="color_start_on",
+        help=f"Specify color for 'start on' lines (default={default_color_start_on}).",
+    )
 
-    parser.add_argument("--color-stop-on",
-                        dest="color_stop_on",
-                        help="Specify color for 'stop on' lines "
-                             "(default=%s)." % default_color_stop_on)
+    parser.add_argument(
+        "--color-stop-on",
+        dest="color_stop_on",
+        help=f"Specify color for 'stop on' lines (default={default_color_stop_on}).",
+    )
 
-    parser.add_argument("--color-event",
-                        dest="color_event",
-                        help="Specify color for event boxes (default=%s)." %
-                             default_color_event)
+    parser.add_argument(
+        "--color-event",
+        dest="color_event",
+        help=f"Specify color for event boxes (default={default_color_event}).",
+    )
 
-    parser.add_argument("--color-text",
-                        dest="color_text",
-                        help="Specify color for summary text (default=%s)." %
-                             default_color_text)
+    parser.add_argument(
+        "--color-text",
+        dest="color_text",
+        help=f"Specify color for summary text (default={default_color_text}).",
+    )
 
-    parser.add_argument("--color-bg",
-                        dest="color_bg",
-                        help="Specify background color for diagram "
-                             "(default=%s)." % default_color_bg)
+    parser.add_argument(
+        "--color-bg",
+        dest="color_bg",
+        help=f"Specify background color for diagram (default={default_color_bg}).",
+    )
 
-    parser.add_argument("--color-event-text",
-                        dest="color_event_text",
-                        help="Specify color for text in event boxes "
-                             "(default=%s)." % default_color_text)
+    parser.add_argument(
+        "--color-event-text",
+        dest="color_event_text",
+        help=f"Specify color for text in event boxes (default={default_color_text}).",
+    )
 
-    parser.add_argument("--color-job-text",
-                        dest="color_job_text",
-                        help="Specify color for text in job boxes "
-                             "(default=%s)." % default_color_text)
+    parser.add_argument(
+        "--color-job-text",
+        dest="color_job_text",
+        help=f"Specify color for text in job boxes (default={default_color_text}).",
+    )
 
-    parser.add_argument("--color-job",
-                        dest="color_job",
-                        help="Specify color for job boxes (default=%s)." %
-                             default_color_job)
+    parser.add_argument(
+        "--color-job",
+        dest="color_job",
+        help=f"Specify color for job boxes (default={default_color_job}).",
+    )
 
     parser.add_argument("--user",
                         dest="system",
@@ -546,19 +550,15 @@ def main():
         try:
             ofh = open(options.outfile, "w")
         except:
-            sys.exit("ERROR: cannot open file %s for writing" %
-                     options.outfile)
+            sys.exit(f"ERROR: cannot open file {options.outfile} for writing")
 
     if options.restrictions:
         restrictions_list = options.restrictions.split(",")
 
     upstart_session = os.environ.get('UPSTART_SESSION', False)
 
-    if options.system == None:
-        if upstart_session:
-            use_system = False
-        else:
-            use_system = True
+    if options.system is None:
+        use_system = not upstart_session
     else:
         use_system = options.system or not upstart_session
 
@@ -570,8 +570,8 @@ def main():
     read_data()
 
     for job in restrictions_list:
-        if not job in jobs:
-            sys.exit("ERROR: unknown job %s" % job)
+        if job not in jobs:
+            sys.exit(f"ERROR: unknown job {job}")
 
     header(ofh)
     show_events(ofh)

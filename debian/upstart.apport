@@ -38,16 +38,13 @@ def add_root_file(map, file):
 
     key = path_to_key(file)
 
-    map[key] = 'cat %s' % file
+    map[key] = f'cat {file}'
 
 
 def add_info(report, ui):
     system_state_file = '/var/log/upstart/upstart.state'
-    system_conf_dir = '/etc/init'
     session_state_file = None
     attach_jobs = False
-    package = None
-
     # files that are not readable by current user
     unreadable_files = {}
 
@@ -59,9 +56,7 @@ def add_info(report, ui):
     # If we are unable to determine a problem category, prompt the user.
     category = 'Unknown'
 
-    if 'Package' in report:
-        package = report['Package'].split()[0]
-
+    package = report['Package'].split()[0] if 'Package' in report else None
     problem_type = report.get('ProblemType', '')
 
     # Determine whether this report relates to a System Init issue,
@@ -74,22 +69,15 @@ def add_info(report, ui):
     # impression.
     if problem_type in ('Crash', 'Hang', 'RecoverableProblem'):
         if 'ProcStatus' in report:
-            pid_line = re.search('Pid:\t(.*)\n', report['ProcStatus'])
-            if pid_line:
-                upstart_pid = pid_line.groups()[0]
-                if upstart_pid:
-                    if int(upstart_pid) == 1:
-                        category = 'System'
-                    else:
-                        category = 'Session'
+            if pid_line := re.search('Pid:\t(.*)\n', report['ProcStatus']):
+                if upstart_pid := pid_line.groups()[0]:
+                    category = 'System' if int(upstart_pid) == 1 else 'Session'
     elif ui:
         response = ui.choice(
             "Upstart is used to supervise both the System and users Desktop\n"
             "sessions. Please choose the option that is most appropriate\n"
             "for the problem you wish to report\n",
             ['System', 'Desktop Session'])
-        if response == None:
-            pass
         if 0 in response:
             category = 'System'
         elif 1 in response:
@@ -103,26 +91,25 @@ def add_info(report, ui):
     elif ui and ui.yesno(msg) == True:
         attach_jobs = True
 
-    if category == 'System' or category == 'Unknown':
+    if category in {'System', 'Unknown'}:
         attach_file(report, '/proc/cmdline', 'ProcKernelCmdline')
 
         # console output
         attach_file_if_exists(report, '/var/log/boot.log', 'BootLog')
 
-        if attach_jobs == True:
+        if attach_jobs:
 
             # Map of files => package names where each file is an Upstart
             # job configuration file.
             file_map = {}
 
-            for file in \
-                glob.glob("%s/*.conf"     % system_conf_dir) + \
-                glob.glob("%s/*.override" % system_conf_dir):
+            system_conf_dir = '/etc/init'
+            for file in glob.glob(f"{system_conf_dir}/*.conf") + glob.glob(f"{system_conf_dir}/*.override"):
 
                 # try and determine which package owns the file
                 owner = apport.packaging.get_file_package(file)
 
-                if owner == None:
+                if owner is None:
                     # If no package owns it, it's either an admin-created
                     # job, or from a manually installed package, so attach.
                     # XXX: We don't use attach_file() since, although it
@@ -144,18 +131,14 @@ def add_info(report, ui):
             for pkg in set(file_map.values()):
                 attach_conffiles(report, pkg)
 
-    if category == 'Session' or category == 'Unknown':
+    if category in {'Session', 'Unknown'}:
         log_dir = os.getenv('XDG_CACHE_HOME', os.path.expanduser('~/.cache/upstart/'))
         conf_dir = os.getenv('XDG_CONFIG_HOME', os.path.expanduser('~/.config/upstart/'))
         old_conf_dir = os.path.expanduser('~/.init/')
         session_state_file = os.path.join(log_dir, 'upstart.state')
 
-        if attach_jobs == True:
-            for file in \
-                glob.glob("%s/*.conf"     % conf_dir) + \
-                glob.glob("%s/*.override" % conf_dir) + \
-                glob.glob("%s/*.conf"     % old_conf_dir) + \
-                glob.glob("%s/*.override" % old_conf_dir):
+        if attach_jobs:
+            for file in glob.glob(f"{conf_dir}/*.conf") + glob.glob(f"{conf_dir}/*.override") + glob.glob(f"{old_conf_dir}/*.conf") + glob.glob(f"{old_conf_dir}/*.override"):
                 attach_file(report, file)
 
     add_root_file(unreadable_files, system_state_file)
@@ -170,13 +153,13 @@ def add_info(report, ui):
 
     report['UpstartRunningSystemVersion'] = command_output(['initctl', '--system', 'version'])
 
-    if category == 'System' or category == 'Unknown':
+    if category in {'System', 'Unknown'}:
         ursysj = command_output(['initctl', '--system', 'list'])
         report['UpstartRunningSystemJobs'] = \
             '\n'.join(sorted(ursysj.split('\n')))
 
     session_count = 0
-    if category == 'Session' or category == 'Unknown':
+    if category in {'Session', 'Unknown'}:
         sessions = command_output(['initctl', 'list-sessions']).split('\n')
         if sessions and sessions[0]:
             session_count = len(sessions)
@@ -184,8 +167,7 @@ def add_info(report, ui):
 
     # join the running session if possible
     if not os.environ.get('UPSTART_SESSION', None) and session_count == 1:
-        session = sessions[0].strip().split()[1]
-        if session:
+        if session := sessions[0].strip().split()[1]:
             os.environ['UPSTART_SESSION'] = session
 
     if os.environ.get('UPSTART_SESSION', None):

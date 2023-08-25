@@ -61,25 +61,33 @@ class TestSessionUpstart(unittest.TestCase):
         if not xdg_runtime_dir or not os.path.exists(xdg_runtime_dir):
             tmp_xdg_runtime_dir = tempfile.mkdtemp(prefix='tmp-xdg-runtime-dir')
             os.environ['XDG_RUNTIME_DIR'] = tmp_xdg_runtime_dir
-            print('INFO: User has no XDG_RUNTIME_DIR so created one: {}'.format(tmp_xdg_runtime_dir))
+            print(
+                f'INFO: User has no XDG_RUNTIME_DIR so created one: {tmp_xdg_runtime_dir}'
+            )
 
 
-        self.file_bridge_conf = '{}{}{}'.format(bridge_session_conf_dir, os.sep, self.FILE_BRIDGE_CONF)
-        self.reexec_conf = '{}{}{}'.format(bridge_session_conf_dir, os.sep, self.REEXEC_CONF)
+        self.file_bridge_conf = (
+            f'{bridge_session_conf_dir}{os.sep}{self.FILE_BRIDGE_CONF}'
+        )
+        self.reexec_conf = f'{bridge_session_conf_dir}{os.sep}{self.REEXEC_CONF}'
 
         # Prefer to use the installed job files if available and the
         # appropriate environment variable is set since they are going
         # to be more current and appropriate for the environment under
         # test.
         if os.environ.get('UPSTART_TEST_USE_INSTALLED_CONF', None):
-            tmp = '{}{}{}'.format(DEFAULT_SESSION_INSTALL_PATH, os.sep, self.FILE_BRIDGE_CONF)
+            tmp = f'{DEFAULT_SESSION_INSTALL_PATH}{os.sep}{self.FILE_BRIDGE_CONF}'
             if os.path.exists(tmp):
-                print('INFO: UPSTART_TEST_USE_INSTALLED_CONF set - using {} rather than {}'.format(tmp, self.file_bridge_conf))
+                print(
+                    f'INFO: UPSTART_TEST_USE_INSTALLED_CONF set - using {tmp} rather than {self.file_bridge_conf}'
+                )
                 self.file_bridge_conf = tmp
 
-            tmp = '{}{}{}'.format(DEFAULT_SESSION_INSTALL_PATH, os.sep, self.REEXEC_CONF)
+            tmp = f'{DEFAULT_SESSION_INSTALL_PATH}{os.sep}{self.REEXEC_CONF}'
             if os.path.exists(tmp):
-                print('INFO: UPSTART_TEST_USE_INSTALLED_CONF set - using {} rather than {}'.format(tmp, self.reexec_conf))
+                print(
+                    f'INFO: UPSTART_TEST_USE_INSTALLED_CONF set - using {tmp} rather than {self.reexec_conf}'
+                )
                 self.reexec_conf = tmp
 
         self.assertTrue(os.path.exists(self.file_bridge_conf))
@@ -90,11 +98,11 @@ class TestSessionUpstart(unittest.TestCase):
         self.logger = logging.getLogger(self.__class__.__name__)
         for cmd in get_init(), get_initctl():
             if not os.path.exists(cmd):
-                raise UpstartException('Command %s not found' % cmd)
+                raise UpstartException(f'Command {cmd} not found')
 
     def tearDown(self):
         # Ensure no state file exists
-        state_file = '{}{}{}'.format(self.log_dir, os.sep, UPSTART_STATE_FILE)
+        state_file = f'{self.log_dir}{os.sep}{UPSTART_STATE_FILE}'
         self.assertFalse(os.path.exists(state_file))
 
     def start_session_init(self):
@@ -145,7 +153,7 @@ class TestFileBridge(TestSessionUpstart):
         # Note that we do not use the bundled user job due to our
         # requirement for a different start condition and different
         # command options.
-        cmd = '{} --daemon --user --debug'.format(get_file_bridge())
+        cmd = f'{get_file_bridge()} --daemon --user --debug'
         lines = """
         start on startup
         stop on session-end
@@ -176,49 +184,49 @@ class TestFileBridge(TestSessionUpstart):
 
         # Create a job that makes use of the file event to watch a
         # file in a newly-created directory.
-        file_msg = 'got file %s' % file
-        lines = []
-        lines.append('start on file FILE=%s EVENT=create' % file)
-        lines.append('exec echo %s' % file_msg)
+        file_msg = f'got file {file}'
+        lines = [f'start on file FILE={file} EVENT=create', f'exec echo {file_msg}']
         create_file_job = self.upstart.job_create('wait-for-file-creation', lines)
         self.assertTrue(create_file_job)
 
         # Create job that waits for a file modification
         lines = []
-        lines.append('start on file FILE=%s EVENT=modify' % file)
-        lines.append('exec echo %s' % file_msg)
+        lines.extend(
+            (f'start on file FILE={file} EVENT=modify', f'exec echo {file_msg}')
+        )
         modify_file_job = self.upstart.job_create('wait-for-file-modify', lines)
         self.assertTrue(modify_file_job)
 
         # Create another job that triggers when the same file is deleted
         lines = []
-        lines.append('start on file FILE=%s EVENT=delete' % file)
-        lines.append('exec echo %s' % file_msg)
+        lines.extend(
+            (f'start on file FILE={file} EVENT=delete', f'exec echo {file_msg}')
+        )
         delete_file_job = self.upstart.job_create('wait-for-file-deletion', lines)
         self.assertTrue(delete_file_job)
 
         # Create job that triggers on directory creation
-        dir_msg = 'got directory %s' % dir
+        dir_msg = f'got directory {dir}'
         lines = []
-        # XXX: note the trailing slash to force a directory watch
-        lines.append('start on file FILE=%s/ EVENT=create' % dir)
-        lines.append('exec echo %s' % dir_msg)
+        lines.extend(
+            (f'start on file FILE={dir}/ EVENT=create', f'exec echo {dir_msg}')
+        )
         create_dir_job = self.upstart.job_create('wait-for-dir-creation', lines)
         self.assertTrue(create_dir_job)
 
         # Create job that triggers on directory modification
         lines = []
-        # XXX: note the trailing slash to force a directory watch
-        lines.append('start on file FILE=%s/ EVENT=modify' % dir)
-        lines.append('exec echo %s' % dir_msg)
+        lines.extend(
+            (f'start on file FILE={dir}/ EVENT=modify', f'exec echo {dir_msg}')
+        )
         modify_dir_job = self.upstart.job_create('wait-for-dir-modify', lines)
         self.assertTrue(modify_dir_job)
 
         # Create job that triggers on directory deletion
         lines = []
-        # XXX: note the trailing slash to force a directory watch
-        lines.append('start on file FILE=%s/ EVENT=delete' % dir)
-        lines.append('exec echo %s' % dir_msg)
+        lines.extend(
+            (f'start on file FILE={dir}/ EVENT=delete', f'exec echo {dir_msg}')
+        )
         delete_dir_job = self.upstart.job_create('wait-for-dir-delete', lines)
         self.assertTrue(delete_dir_job)
 
@@ -361,7 +369,7 @@ class TestSessionInitReExec(TestSessionUpstart):
         #
         # We create this file before any other to allow time for Upstart
         # to _attempt to parse it_ by the time the re-exec is initiated.
-        invalid_conf = "{}/invalid.conf".format(self.upstart.test_dir)
+        invalid_conf = f"{self.upstart.test_dir}/invalid.conf"
         with open(invalid_conf, 'w', encoding='utf-8') as fh:
             print("invalid", file=fh)
 
@@ -534,13 +542,12 @@ class TestState(TestSessionUpstart):
         path = conf_file['path']
         self.assertTrue(path)
 
-        full_job_path = '{}{}{}.conf'.format(job.job_dir, os.sep, job.name)
+        full_job_path = f'{job.job_dir}{os.sep}{job.name}.conf'
 
         self.assertEqual(path, full_job_path)
         self.stop_session_init()
 
 def main():
-    kwargs = {}
     format =             \
         '%(asctime)s:'   \
         '%(filename)s:'  \
@@ -549,11 +556,7 @@ def main():
         '%(levelname)s:' \
         '%(message)s'
 
-    kwargs['format'] = format
-
-    # We want to see what's happening
-    kwargs['level'] = logging.DEBUG
-
+    kwargs = {'format': format, 'level': logging.DEBUG}
     logging.basicConfig(**kwargs)
 
     unittest.main(

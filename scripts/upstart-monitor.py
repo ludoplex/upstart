@@ -62,7 +62,10 @@ try:
     from gi.repository import Gtk, Gdk, GLib
 except ImportError:
     gettext.install(NAME)
-    print("%s: %s" % (_('WARNING'), _('GUI modules not available - falling back to CLI')), file=sys.stderr)
+    print(
+        f"{_('WARNING')}: {_('GUI modules not available - falling back to CLI')}",
+        file=sys.stderr,
+    )
     cli = True
 
 """
@@ -173,7 +176,7 @@ def format_event(*args):
 
     for e in raw_env:
         f = e.split('=')
-        quoted_env.append("%s='%s'" % (f[0], ''.join(f[1:])))
+        quoted_env.append(f"{f[0]}='{''.join(f[1:])}'")
 
     env = ' '.join(str(e) for e in quoted_env)
 
@@ -188,9 +191,9 @@ def cmdline_event_handler(*args):
 
     event, env = format_event(*args)
     now = datetime.now().strftime("%F %T.%f")
-    event_str = "%s %s" % (event, env) if env else event
+    event_str = f"{event} {env}" if env else event
     sep = cmdline_args.separator if cmdline_args.separator else "\t"
-    print("%s%s%s" % (now, sep, event_str))
+    print(f"{now}{sep}{event_str}")
 
 
 class UpstartEventsGui(Gtk.Window):
@@ -206,7 +209,7 @@ class UpstartEventsGui(Gtk.Window):
         """
         self.data_index += 1
         now = datetime.now().strftime("%F %T.%f")
-        event_str = "%s %s" % (event, event_env) if event_env else event
+        event_str = f"{event} {event_env}" if event_env else event
 
         row = [self.data_index, now, event_str]
         self.liststore.append(row)
@@ -260,7 +263,7 @@ class UpstartEventsGui(Gtk.Window):
                 msg)
         response = dialog.run()
         dialog.destroy()
-        return True if response == Gtk.ResponseType.YES else False
+        return response == Gtk.ResponseType.YES
 
 
     def show_dialog(self, msg):
@@ -284,7 +287,7 @@ class UpstartEventsGui(Gtk.Window):
         """
         about = Gtk.AboutDialog()
         about.set_program_name(NAME)
-        about.set_version("%s %s" % (_('Version'), VERSION))
+        about.set_version(f"{_('Version')} {VERSION}")
         about.set_copyright(COPYRIGHT)
         about.set_comments(DESCRIPTION)
         about.set_authors(AUTHORS)
@@ -331,7 +334,7 @@ class UpstartEventsGui(Gtk.Window):
         try:
             fh = open(path, 'w')
         except IOError:
-            self.show_dialog('%s: %s' % (_('Error saving file'), path))
+            self.show_dialog(f"{_('Error saving file')}: {path}")
 
         for row in self.liststore:
             fh.write("%d\t%s\t%s\n" % (row[0], row[1], row[2]))
@@ -403,8 +406,7 @@ class UpstartEventsGui(Gtk.Window):
         Returns: True if user is happy to clear the data, else False.
         """
         if len(self.liststore) and self.need_save:
-            answer = self.ask_question(message)
-            return answer
+            return self.ask_question(message)
         else:
             # no data would be lost so allow action
             return True
@@ -546,7 +548,7 @@ class UpstartEventsGui(Gtk.Window):
 
         if self.auto_scroll:
             self.auto_scroll_handler = \
-            self.treeview.connect('size-allocate', self.treeview_changed)
+                self.treeview.connect('size-allocate', self.treeview_changed)
 
         renderer_text = Gtk.CellRendererText()
 
@@ -589,8 +591,9 @@ class UpstartEventsGui(Gtk.Window):
         self.button_quit = Gtk.Button(stock=Gtk.STOCK_QUIT)
         self.button_quit.connect('clicked', self.on_button_quit_clicked)
 
-        self.label_connected = Gtk.Label('%s %s' % (_('Connected to'),
-            destinations[cmdline_args.destination]))
+        self.label_connected = Gtk.Label(
+            f"{_('Connected to')} {destinations[cmdline_args.destination]}"
+        )
         self.label_connected.set_justify(Gtk.Justification.RIGHT)
 
         self.buttons_box = Gtk.Box(spacing=6, orientation=Gtk.Orientation.HORIZONTAL)
@@ -641,14 +644,7 @@ def main():
     dbus.set_default_main_loop(dbus.mainloop.glib.DBusGMainLoop())
 
     if not cmdline_args.destination:
-        # If no destination specified, attempt to connect to session
-        # if running under a Session Init, else connect to the system
-        # bus (since this allows even non-priv users to see events).
-        if SESSION_SOCKET:
-            cmdline_args.destination = 'session-socket'
-        else:
-            cmdline_args.destination = 'system-bus'
-
+        cmdline_args.destination = 'session-socket' if SESSION_SOCKET else 'system-bus'
     if cmdline_args.destination == 'system-bus':
         bus = dbus.SystemBus()
     elif cmdline_args.destination == 'session-bus':
@@ -669,11 +665,11 @@ def main():
         bus.add_signal_receiver(cmdline_event_handler, dbus_interface='com.ubuntu.Upstart0_6',
             signal_name='EventEmitted')
         loop = GLib.MainLoop()
-        print('# Upstart Event Monitor (%s)' % _('console mode'))
+        print(f"# Upstart Event Monitor ({_('console mode')})")
         print('#')
-        print('# %s %s' % (_('Connected to'), destinations[cmdline_args.destination]))
+        print(f"# {_('Connected to')} {destinations[cmdline_args.destination]}")
         print('#')
-        print('# %s' % _('Columns: time, event and environment'))
+        print(f"# {_('Columns: time, event and environment')}")
         print('')
         loop.run()
     else:
